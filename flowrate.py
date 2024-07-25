@@ -11,10 +11,14 @@ import inspect # Used to put the shape function in the GCODE
 # =======================
 
 # Flow rate values to test in mm3/s. Values should increase
-values = [10, 12, 14, 16, 18, 20]
+values = [10, 11, 12, 13, 14, 15]
+# values = [10, 10, 10, 10, 10, 10]
 
 # Width of extrusion in mm
 extrusionWidth = 0.4
+
+# Maximum accelleration in mm/s2
+maxAccel = 20000
 
 # Layer thickness in mm
 layerHeight = 0.2
@@ -25,6 +29,12 @@ sectionHeight = 10
 # Number of loops in the brim. Also used for initial purge
 brimLoops = 5
 
+# Fan speed [0,255] for after the first layers
+fanSpeed = 255
+
+# The height to turn the fan on in mm
+fanOnHeight = 3
+
 # Filament extrusion multiplier, should probably be 1
 extrusionMult = 1.0
 
@@ -32,28 +42,17 @@ extrusionMult = 1.0
 filamentDiam = 1.75
 
 # Max width or height of the shape in mm
-size = 50
+size = 100
 
 # Center coordinates of the test [x, y] in mm
 center = [60, 60]
 
-# Number of points around shape
-numPoints = 100
-
 # Filename to save GCODE to
 filename = "demo.gcode"
 
-# Start GCODE. Include any homing, temperatures, and other startup code here. Copy from slicer
+# Start GCODE. Include any homing and other startup code here. Copy from slicer. At a minimum set and wait for temperature, and home the machine.
 startgcode = '''\
-SET_DISPLAY_TEXT ; clear display
 print_start EXTRUDER=215 BED=60
-; Purge line
-M109 S215
-G0 X1 Y1 Z5 F3500
-G1 Z0.2 E4 F3500
-G1 E2
-G1 X70 Y1 Z0.2 E15 F3500
-G0 Z5 E-1 F3500
 '''
 
 # End GCODE. Copy from slicer
@@ -66,13 +65,14 @@ print_end    ;end script from macro
 # =======================
 
 # Number of points around shape
-numPoints = 100
+numPoints = 128
 
 # The bumpyness of the default shape. Range [0, 1]
-bumpyness = 0.5
+bumpyness = 0.2
 
 # Shape of the test piece. Defined as a function in polar coordinates. Will automatically be normalized
-shape = lambda theta: 1 + (bumpyness * np.sin(2 * theta + (np.pi/2)))
+# shape = lambda theta: 1 + (bumpyness * np.sin(2 * theta + (np.pi/2)))
+shape = lambda theta: np.ones(np.shape(theta)[0])
 
 # Section marker height in mm, subtracted from total section height
 sectionMarkerHeight = 2
@@ -119,6 +119,8 @@ dists[0] = np.sqrt(((shapex[-1]-shapex[0]) ** 2) + ((shapey[-1]-shapey[0]) ** 2)
 # Calculate extrusions per segment. Last point connects to first
 extrusions = dists * extr * extrusionMult
 
+gcodeNumFmt = ".3f"
+
 print("Writeing GCODE file ...", end='')
 with open(filename, "w") as gcf:
     # Save the config values to the GCODE so you can see later what you did
@@ -141,7 +143,12 @@ with open(filename, "w") as gcf:
 
     # Start GCODE
     gcf.write(startgcode)
+    gcf.write("G21 ; set units to millimeters\n")
+    gcf.write("G90 ; use absolute coordinates\n")
     gcf.write("M83 ; Extruder relative mode\n")
+    gcf.write("107 ; Turn fans off\n")
+    gcf.write(f"M204 S{maxAccel}")
+
     gcf.write("\n")
 
     # Main GCODE
@@ -168,25 +175,32 @@ with open(filename, "w") as gcf:
     # Write the brim
     gcf.write(f";Brim speed: {values[0]:.2f} mm3\n")
     gcf.write(f"G1 F{travel:.2f}\n")
-    gcf.write(f"G1 X{brimx[0]:.2f} Y{brimy[0]:.2f} Z{layerHeight:.2f} E{brime[0]:.2f}\n")
+    gcf.write(f"G1 X{brimx[0]:{gcodeNumFmt}} Y{brimy[0]:{gcodeNumFmt}} Z{layerHeight:{gcodeNumFmt}} E{brime[0]:{gcodeNumFmt}}\n")
     for i in range(1, len(brimx)):
-        gcf.write(f"G1 X{brimx[i]:.2f} Y{brimy[i]:.2f} E{brime[i]:.2f}\n")
+        gcf.write(f"G1 X{brimx[i]:{gcodeNumFmt}} Y{brimy[i]:{gcodeNumFmt}} E{brime[i]:{gcodeNumFmt}}\n")
     gcf.write("\n")
+
+    fan = False
 
     # Calculate and write the tower
     for val in values:
-        gcf.write(f";Speed: {val:.2f} mm3\n")
+        gcf.write(f";Speed: {val:{gcodeNumFmt}} mm3\n")
 
         # Calculate travel feedrates in mm/min
         travel = (val / area) * 60
-        gcf.write(f"G1 F{travel:.2f}\n")
+        gcf.write(f"G1 F{travel:{gcodeNumFmt}}\n")
 
         # Calculate the z position of the next section marker
         markStart = lz + (sectionHeight - sectionMarkerHeight)
 
         # Generate the section
         for l in range(int(sectionHeight // layerHeight)):
-            gcf.write(f";Speed {val} Layer {l}\n")
+            gcf.write(f";Speed {val:{gcodeNumFmt}} Layer {l}\n")
+
+            # Turn on fan if needed
+            if lz > fanOnHeight and not fan:
+                gcf.write(f"M106 S{fanSpeed:.0f}")
+                fan = True
 
             # Do a loop
             for i in range(len(shapex)):
@@ -202,13 +216,14 @@ with open(filename, "w") as gcf:
                 e = extrusions[i] * factor
 
                 # Write the next point
-                gcf.write(f"G1 X{x:.2f} Y{y:.2f} Z{z:.2f} E{e:.4f}\n")
+                gcf.write(f"G1 X{x:{gcodeNumFmt}} Y{y:{gcodeNumFmt}} Z{z:{gcodeNumFmt}} E{e:.4f}\n")
 
             # Go to the next layer
             lz += layerHeight
 
     # End GCODE
     gcf.write("\n")
+    gcf.write("M107; Fan off")
     gcf.write(endgcode)
 
 # All done

@@ -13,12 +13,15 @@ Settings:
 |--------|------
 | values | List of flow rate values to test in mm3/s. Values should increase so that higher rates don't disturb lower ones. The first value is used for the brim, so make sure it actually works.
 | extrusionWidth | The expected extrusion width. This is normally your nozzle diameter if you've tuned your extrusion just right. This is used for calculating flow rates and brim width
+| maxAccel | The maximum accelleration your printer can support. Use a low enough value that the printer will work reliably. Note that this may reduce speeds (and thus flowrates) near corners.
 | layerHeight | The desired layer thickness in mm
 | sectionHeight | The height of each flowrate section. This includes the markers, which are 2mm tall by default.
 | brimLoops | The number of loops on the brim. This is both for purging at the beginning, as well as bed adhesion. If you are testing a bedslinger, you might want to increase this.
+| fanSpeed | The fan speed for the print. Values are 0-255, other values will cause issues.
+| fanOnHeight | The height to turn the fan on in mm. The fan will turn on at the start of the next loop after this height.
 | extrusionMult | The extrusion multiplier. Generally this should be 1, but if you've tuned something else in, put that here.
 | filamentDiam | The diameter of the filament you're using in mm. This should probably be 1.75 unless you know it should be different.
-| size | The size of the test piece in mm. The test piece will be scaled to fit in a size x size square
+| size | The size of the test piece in mm. The test piece will be scaled to fit in a size x size square. Ensure this is large enough that the each layer has time to cool before the next.
 | center | The center of the test piece, this should generally be the center of your bed
 | filename | The filename to save the GCODE file to. It will be saved in the same folder as the `.py` file unless you specify otherwise. Include the `.gcode` extension, or specify your own.
 | startgcode | The start GCODE for the printer. This MUST at a minimum (1) Set and wait for hotend temperature (2) Turn on the heatbed here if you use it (3) Home the printer. Probably just copy this from your slicer, and replace any variables. My default is provided as an example, but you may need to modify it.
