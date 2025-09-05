@@ -10,7 +10,25 @@ import inspect # Used to put the shape function in the GCODE
 # CONFIG
 # =======================
 
+# A library of materials and their print settings
+# hotend is the hotend temperature in celsius
+# bed is the bed temperature in celsius
+# fan is the fan speed [0,255]
+# fanOn is the height to turn the fan on in mm
+# mult is the extrusion multiplier
+# diam is the filament diameter
+materials = {
+    "pla": {"hotend": 225, "bed": 60, "fan": 255, "fanOn": 3, "mult": 1, "diam": 1.75},
+    "asa": {"hotend": 260, "bed": 100, "fan": 25, "fanOn": 3, "mult": 1, "diam": 1.75},
+    "petg": {"hotend": 240, "bed": 85, "fan": 25, "fanOn": 3, "mult": 1, "diam": 1.75}
+}
+
+# Material. Only used to generate filename
+material = "petg"
+
 # Flow rate values to test in mm3/s. Values should increase
+# values = [20, 21, 22, 23, 24, 25]
+# values = [15, 16, 17, 18, 19, 20]
 values = [10, 11, 12, 13, 14, 15]
 # values = [10, 10, 10, 10, 10, 10]
 
@@ -29,30 +47,15 @@ sectionHeight = 10
 # Number of loops in the brim. Also used for initial purge
 brimLoops = 5
 
-# Fan speed [0,255] for after the first layers
-fanSpeed = 255
-
-# The height to turn the fan on in mm
-fanOnHeight = 3
-
-# Filament extrusion multiplier, should probably be 1
-extrusionMult = 1.0
-
-# Filament diameter in mm
-filamentDiam = 1.75
-
 # Max width or height of the shape in mm
-size = 100
+size = 200
 
 # Center coordinates of the test [x, y] in mm
-center = [60, 60]
+center = [175, 175]
 
-# Filename to save GCODE to
-filename = "demo.gcode"
-
-# Start GCODE. Include any homing and other startup code here. Copy from slicer. At a minimum set and wait for temperature, and home the machine.
+# Start GCODE. Include any homing and other startup code here. Copy from slicer. At a minimum set and wait for temperature, and home the machine. You can get variables for temperature and fan as "{hotendTemp}", "{bedTemp}", and "{fanSpeed}"
 startgcode = '''\
-print_start EXTRUDER=215 BED=60
+print_start EXTRUDER={hotendTemp} BED={bedTemp}
 '''
 
 # End GCODE. Copy from slicer
@@ -64,8 +67,24 @@ print_end    ;end script from macro
 # ADVANCED CONFIG - probably don't touch
 # =======================
 
+# Hotend temperature in celsius
+hotendTemp = materials[material]["hotend"]
+# Bed temperature in celsius
+bedTemp = materials[material]["bed"]
+# Fan speed [0,255] for after the first layers
+fanSpeed = materials[material]["fan"]
+# The height to turn the fan on in mm
+fanOnHeight = materials[material]["fanOn"]
+# Filament extrusion multiplier, should probably be 1
+extrusionMult = materials[material]["mult"]
+# Filament diameter in mm
+filamentDiam = materials[material]["diam"]
+
+# Filename to save GCODE to
+filename = f"flowtest_{material}_{values[0]:.1f}-{values[-1]:.1f}_d{size:.0f}.gcode"
+
 # Number of points around shape
-numPoints = 128
+numPoints = 256
 
 # The bumpyness of the default shape. Range [0, 1]
 bumpyness = 0.2
@@ -75,10 +94,10 @@ bumpyness = 0.2
 shape = lambda theta: np.ones(np.shape(theta)[0])
 
 # Section marker height in mm, subtracted from total section height
-sectionMarkerHeight = 2
+sectionMarkerHeight = 1
 
 # Section marker depth in mm
-sectionMarkerDepth = 1
+sectionMarkerDepth = 0.2
 
 # Shape of marker. Takes a value [0,1] for the input height, and returns a change in mm of the size
 sectionMarkerShape = lambda h: (np.cos(2 * np.pi * h) / 2) + 0.5
@@ -141,8 +160,11 @@ with open(filename, "w") as gcf:
     gcf.write(f";Num points: {numPoints:.0f}mm\n")
     gcf.write("\n")
 
+    # Object 
+    gcf.write(f"EXCLUDE_OBJECT_DEFINE NAME='speedtest_shape' CENTER={center[0]:.3f},{center[1]:.3f} POLYGON=[[{center[0]-size/2},{center[1]-size/2}],[{center[0]-size/2},{center[1]+size/2}],[{center[0]+size/2},{center[1]+size/2}],[{center[0]+size/2},{center[1]-size/2}]]\n")
+
     # Start GCODE
-    gcf.write(startgcode)
+    gcf.write(startgcode.format(hotendTemp=hotendTemp, bedTemp=bedTemp, fanSpeed=fanSpeed))
     gcf.write("G21 ; set units to millimeters\n")
     gcf.write("G90 ; use absolute coordinates\n")
     gcf.write("M83 ; Extruder relative mode\n")
